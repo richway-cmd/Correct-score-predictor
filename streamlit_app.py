@@ -1,85 +1,89 @@
 import streamlit as st
-from scipy.stats import poisson
+import pandas as pd
+import numpy as np
 
-# Title of the App
-st.title("Football Match Outcome Predictor")
+# Title of the app
+st.title("Football Match Probability Prediction")
 
-# Sidebar Input
-st.sidebar.header("Input Team Data")
-
-st.sidebar.subheader("Home Team")
-avg_home_goals_scored = st.sidebar.number_input("Average Goals Scored (Home)", min_value=0.0, value=1.5, step=0.1)
-avg_home_goals_conceded = st.sidebar.number_input("Average Goals Conceded (Home)", min_value=0.0, value=1.2, step=0.1)
-avg_home_points = st.sidebar.number_input("Average Points (Home)", min_value=0.0, value=1.8, step=0.1)
-
-st.sidebar.subheader("Away Team")
-avg_away_goals_scored = st.sidebar.number_input("Average Goals Scored (Away)", min_value=0.0, value=1.2, step=0.1)
-avg_away_goals_conceded = st.sidebar.number_input("Average Goals Conceded (Away)", min_value=0.0, value=1.3, step=0.1)
-avg_away_points = st.sidebar.number_input("Average Points (Away)", min_value=0.0, value=1.4, step=0.1)
-
-st.sidebar.subheader("League Averages")
-league_avg_goals_scored = st.sidebar.number_input("League Average Goals Scored per Match", min_value=0.1, value=1.5, step=0.1)
-league_avg_goals_conceded = st.sidebar.number_input("League Average Goals Conceded per Match", min_value=0.1, value=1.5, step=0.1)
-
-# Calculate Attack and Defense Strengths
-home_attack_strength = avg_home_goals_scored / league_avg_goals_scored
-home_defense_strength = avg_home_goals_conceded / league_avg_goals_conceded
-
-away_attack_strength = avg_away_goals_scored / league_avg_goals_scored
-away_defense_strength = avg_away_goals_conceded / league_avg_goals_conceded
-
-# Calculate Expected Goals
-home_expected_goals = home_attack_strength * away_defense_strength * league_avg_goals_scored
-away_expected_goals = away_attack_strength * home_defense_strength * league_avg_goals_scored
-
-# Display Calculated Strengths and Expected Goals
-st.subheader("Calculated Strengths")
-st.write(f"**Home Attack Strength:** {home_attack_strength:.2f}")
-st.write(f"**Home Defense Strength:** {home_defense_strength:.2f}")
-st.write(f"**Away Attack Strength:** {away_attack_strength:.2f}")
-st.write(f"**Away Defense Strength:** {away_defense_strength:.2f}")
-
-st.subheader("Expected Goals")
-st.write(f"**Home Team Expected Goals:** {home_expected_goals:.2f}")
-st.write(f"**Away Team Expected Goals:** {away_expected_goals:.2f}")
-
-# Function to Calculate Score Probabilities
-def calculate_score_probabilities(home_goals, away_goals):
-    home_probs = poisson.pmf(home_goals, home_expected_goals)
-    away_probs = poisson.pmf(away_goals, away_expected_goals)
-    return home_probs * away_probs
-
-# Predict Probabilities for Scorelines
-st.subheader("Scoreline Probabilities")
-max_goals = st.slider("Max Goals to Display", min_value=3, max_value=10, value=5)
-probabilities = {}
-
-for home_goals in range(max_goals + 1):
-    for away_goals in range(max_goals + 1):
-        prob = calculate_score_probabilities(home_goals, away_goals)
-        probabilities[(home_goals, away_goals)] = prob
-
-# Display Probabilities as a Table
-st.write("Probabilities for Each Scoreline:")
-prob_table = {
-    "Home Goals": [],
-    "Away Goals": [],
-    "Probability (%)": [],
-}
-
-for (home_goals, away_goals), prob in probabilities.items():
-    prob_table["Home Goals"].append(home_goals)
-    prob_table["Away Goals"].append(away_goals)
-    prob_table["Probability (%)"].append(round(prob * 100, 2))
-
-st.dataframe(prob_table)
-
-# Recommend Most Likely Scoreline
-most_likely_scoreline = max(probabilities, key=probabilities.get)
-most_likely_prob = probabilities[most_likely_scoreline] * 100
-
-st.subheader("Most Likely Outcome")
-st.write(
-    f"The most likely scoreline is **{most_likely_scoreline[0]}-{most_likely_scoreline[1]}** "
-    f"with a probability of **{most_likely_prob:.2f}%**."
+# Sidebar input
+selected_points = st.sidebar.multiselect(
+    "Select Points for Probabilities and Odds",
+    options=[
+        "Home Win", "Draw", "Away Win",
+        "Over 2.5", "Under 2.5",
+        "Correct Score", "HT/FT",
+        "BTTS", "Exact Goals"
+    ]
 )
+
+# Display selected points
+st.subheader("Selected Points for Prediction")
+st.write(selected_points)
+
+# Mock functions to calculate probabilities
+def calculate_ht_ft_probabilities():
+    np.random.seed(42)  # For consistent random numbers
+    data = {
+        "Half Time / Full Time": ["1/1", "1/X", "1/2", "X/1", "X/X", "X/2", "2/1", "2/X", "2/2"],
+        "Probabilities (%)": [26.0, 4.8, 1.6, 16.4, 17.4, 11.2, 2.2, 4.8, 15.5]
+    }
+    return pd.DataFrame(data)
+
+def calculate_correct_score_probabilities():
+    np.random.seed(42)
+    data = {
+        "Score": [
+            "1:0", "2:0", "2:1", "3:0", "3:1", "3:2", "4:0", "4:1", "5:0",
+            "0:0", "1:1", "2:2", "3:3", "4:4", "5:5", "Other",
+            "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "0:4", "1:4", "0:5"
+        ],
+        "Probabilities (%)": [
+            12.4, 8.5, 8.8, 3.9, 4.0, 2.1, 1.3, 1.4, 0.4,
+            9.0, 12.8, 4.6, 0.7, 0.1, None, 2.9,
+            9.3, 4.8, 6.6, 1.7, 2.3, 1.6, 0.4, 0.6, 0.1
+        ]
+    }
+    return pd.DataFrame(data)
+
+def calculate_btts_probabilities():
+    return pd.DataFrame({
+        "BTTS (Yes/No)": ["Yes", "No"],
+        "Probabilities (%)": [53.0, 47.0]
+    })
+
+def calculate_exact_goals_probabilities():
+    return pd.DataFrame({
+        "Exact Goals": [0, 1, 2, 3, 4, 5],
+        "Probabilities (%)": [8.0, 22.0, 35.0, 20.0, 10.0, 5.0]
+    })
+
+# Generate predictions based on user selection
+if selected_points:
+    st.subheader("Prediction Results")
+
+    if "HT/FT" in selected_points:
+        st.write("### Half Time / Full Time - Probabilities (%)")
+        ht_ft_probs = calculate_ht_ft_probabilities()
+        st.table(ht_ft_probs)
+
+    if "Correct Score" in selected_points:
+        st.write("### Correct Score - Probabilities (%)")
+        correct_score_probs = calculate_correct_score_probabilities()
+        st.table(correct_score_probs)
+
+    if "BTTS" in selected_points:
+        st.write("### Both Teams to Score (Yes/No) - Probabilities (%)")
+        btts_probs = calculate_btts_probabilities()
+        st.table(btts_probs)
+
+    if "Exact Goals" in selected_points:
+        st.write("### Exact Goals - Probabilities (%)")
+        exact_goals_probs = calculate_exact_goals_probabilities()
+        st.table(exact_goals_probs)
+
+    # Summary of the results
+    st.subheader("Summary")
+    st.write("- Metrics with higher probabilities indicate stronger outcomes.")
+    st.write("- Use these probabilities to make informed decisions.")
+else:
+    st.write("Please select points from the sidebar to see predictions.")
