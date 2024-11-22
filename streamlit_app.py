@@ -1,89 +1,68 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
+from scipy.stats import poisson
 
-# Title of the app
-st.title("Football Match Probability Prediction")
+# Sidebar inputs
+st.sidebar.header("Input Parameters")
+team1_attack = st.sidebar.number_input("Team 1 Attack Strength (Home Avg)", min_value=0.0, value=1.5, step=0.1)
+team1_defense = st.sidebar.number_input("Team 1 Defense Strength (Home Avg)", min_value=0.0, value=1.0, step=0.1)
+team2_attack = st.sidebar.number_input("Team 2 Attack Strength (Away Avg)", min_value=0.0, value=1.2, step=0.1)
+team2_defense = st.sidebar.number_input("Team 2 Defense Strength (Away Avg)", min_value=0.0, value=1.1, step=0.1)
+margin = st.sidebar.slider("Margin % (Odds Adjustment)", 0, 100, 10)
 
-# Sidebar input
-selected_points = st.sidebar.multiselect(
-    "Select Points for Probabilities and Odds",
-    options=[
-        "Home Win", "Draw", "Away Win",
-        "Over 2.5", "Under 2.5",
-        "Correct Score", "HT/FT",
-        "BTTS", "Exact Goals"
-    ]
-)
+# Calculate team goal expectations
+team1_goals = (team1_attack + team2_defense) / 2
+team2_goals = (team2_attack + team1_defense) / 2
 
-# Display selected points
-st.subheader("Selected Points for Prediction")
-st.write(selected_points)
+# Header
+st.title("Football Match Odds & Probabilities Calculator")
+st.subheader("Match Parameters and Goal Expectations")
+st.write(f"Team 1 Expected Goals: **{team1_goals:.2f}**")
+st.write(f"Team 2 Expected Goals: **{team2_goals:.2f}**")
 
-# Mock functions to calculate probabilities
-def calculate_ht_ft_probabilities():
-    np.random.seed(42)  # For consistent random numbers
-    data = {
-        "Half Time / Full Time": ["1/1", "1/X", "1/2", "X/1", "X/X", "X/2", "2/1", "2/X", "2/2"],
-        "Probabilities (%)": [26.0, 4.8, 1.6, 16.4, 17.4, 11.2, 2.2, 4.8, 15.5]
-    }
-    return pd.DataFrame(data)
+# Correct Score Probabilities
+st.header("Correct Score Odds and Probabilities")
 
-def calculate_correct_score_probabilities():
-    np.random.seed(42)
-    data = {
-        "Score": [
-            "1:0", "2:0", "2:1", "3:0", "3:1", "3:2", "4:0", "4:1", "5:0",
-            "0:0", "1:1", "2:2", "3:3", "4:4", "5:5", "Other",
-            "0:1", "0:2", "1:2", "0:3", "1:3", "2:3", "0:4", "1:4", "0:5"
-        ],
-        "Probabilities (%)": [
-            12.4, 8.5, 8.8, 3.9, 4.0, 2.1, 1.3, 1.4, 0.4,
-            9.0, 12.8, 4.6, 0.7, 0.1, None, 2.9,
-            9.3, 4.8, 6.6, 1.7, 2.3, 1.6, 0.4, 0.6, 0.1
-        ]
-    }
-    return pd.DataFrame(data)
+max_goals = st.number_input("Max Goals to Display", min_value=1, value=5, step=1)
+scores_matrix = np.zeros((max_goals + 1, max_goals + 1))
 
-def calculate_btts_probabilities():
-    return pd.DataFrame({
-        "BTTS (Yes/No)": ["Yes", "No"],
-        "Probabilities (%)": [53.0, 47.0]
-    })
+# Populate scores matrix with probabilities
+for i in range(max_goals + 1):
+    for j in range(max_goals + 1):
+        scores_matrix[i, j] = poisson.pmf(i, team1_goals) * poisson.pmf(j, team2_goals)
 
-def calculate_exact_goals_probabilities():
-    return pd.DataFrame({
-        "Exact Goals": [0, 1, 2, 3, 4, 5],
-        "Probabilities (%)": [8.0, 22.0, 35.0, 20.0, 10.0, 5.0]
-    })
+# Display probabilities as a table
+score_labels = [f"{i}:{j}" for i in range(max_goals + 1) for j in range(max_goals + 1)]
+score_probs = [scores_matrix[i, j] for i in range(max_goals + 1) for j in range(max_goals + 1)]
 
-# Generate predictions based on user selection
-if selected_points:
-    st.subheader("Prediction Results")
+# Create a DataFrame for better visualization
+scores_df = pd.DataFrame({
+    "Score": score_labels,
+    "Probability": score_probs
+}).sort_values(by="Probability", ascending=False).reset_index(drop=True)
 
-    if "HT/FT" in selected_points:
-        st.write("### Half Time / Full Time - Probabilities (%)")
-        ht_ft_probs = calculate_ht_ft_probabilities()
-        st.table(ht_ft_probs)
+st.subheader("Top Score Probabilities")
+st.table(scores_df.head(10))
 
-    if "Correct Score" in selected_points:
-        st.write("### Correct Score - Probabilities (%)")
-        correct_score_probs = calculate_correct_score_probabilities()
-        st.table(correct_score_probs)
+# Correct Score Odds
+st.subheader("Correct Score Odds")
+scores_df["Odds"] = (1 / scores_df["Probability"]) * (1 + margin / 100)
+st.table(scores_df.head(10)[["Score", "Odds"]])
 
-    if "BTTS" in selected_points:
-        st.write("### Both Teams to Score (Yes/No) - Probabilities (%)")
-        btts_probs = calculate_btts_probabilities()
-        st.table(btts_probs)
+# Over/Under Total Goals
+st.header("Over/Under Totals")
+total_goals = np.arange(0, 2 * max_goals + 1)
+over_under_probs = [np.sum(
+    [poisson.pmf(i, team1_goals) * poisson.pmf(j, team2_goals) for i in range(k + 1) for j in range(k + 1)]
+) for k in total_goals]
 
-    if "Exact Goals" in selected_points:
-        st.write("### Exact Goals - Probabilities (%)")
-        exact_goals_probs = calculate_exact_goals_probabilities()
-        st.table(exact_goals_probs)
+# Visualize cumulative probabilities for total goals
+st.line_chart(pd.DataFrame({
+    "Total Goals": total_goals,
+    "Cumulative Probability": over_under_probs
+}).set_index("Total Goals"), use_container_width=True)
 
-    # Summary of the results
-    st.subheader("Summary")
-    st.write("- Metrics with higher probabilities indicate stronger outcomes.")
-    st.write("- Use these probabilities to make informed decisions.")
-else:
-    st.write("Please select points from the sidebar to see predictions.")
+# Summary
+st.header("Summary")
+st.write("This app provides dynamic calculations for match probabilities, correct score odds, and over/under totals based on team attack and defense strengths. Adjust the inputs and explore the results!")
